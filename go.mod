@@ -15,9 +15,9 @@ require (
 	github.com/stretchr/testify v1.8.1
 	github.com/test-network-function/test-network-function-claim v1.0.8
 	gopkg.in/yaml.v2 v2.4.0
-	k8s.io/api v0.25.4
+	k8s.io/api v0.25.5
 	k8s.io/apiextensions-apiserver v0.25.2
-	k8s.io/apimachinery v0.25.4
+	k8s.io/apimachinery v0.25.5
 	k8s.io/client-go v0.25.4
 	k8s.io/utils v0.0.0-20221011040102-427025108f67
 	sigs.k8s.io/controller-runtime v0.13.1
@@ -56,11 +56,11 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/net v0.2.0 // indirect
+	golang.org/x/net v0.3.1-0.20221206200815-1e63c2f08a10 // indirect
 	golang.org/x/oauth2 v0.0.0-20221006150949-b44042a4b9c1 // indirect
-	golang.org/x/sys v0.2.0 // indirect
-	golang.org/x/term v0.2.0 // indirect
-	golang.org/x/text v0.4.0 // indirect
+	golang.org/x/sys v0.3.0 // indirect
+	golang.org/x/term v0.3.0 // indirect
+	golang.org/x/text v0.5.0 // indirect
 	golang.org/x/time v0.0.0-20220922220347-f3bd1da661af // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
