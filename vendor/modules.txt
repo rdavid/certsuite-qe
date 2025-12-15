@@ -446,7 +446,7 @@ github.com/red-hat-storage/odf-operator/api/v1alpha1
 # github.com/redhat-best-practices-for-k8s/certsuite-claim v1.0.61
 ## explicit; go 1.25.4
 github.com/redhat-best-practices-for-k8s/certsuite-claim/pkg/claim
-# github.com/redhat-best-practices-for-k8s/oct v0.0.53
+# github.com/redhat-best-practices-for-k8s/oct v0.0.54
 ## explicit; go 1.25.4
 github.com/redhat-best-practices-for-k8s/oct/pkg/certdb/config
 github.com/redhat-best-practices-for-k8s/oct/pkg/certdb/offlinecheck
@@ -460,7 +460,7 @@ github.com/ryanuber/go-glob
 # github.com/sirupsen/logrus v1.9.3
 ## explicit; go 1.13
 github.com/sirupsen/logrus
-# github.com/spf13/cobra v1.10.1
+# github.com/spf13/cobra v1.10.2
 ## explicit; go 1.15
 github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.10
