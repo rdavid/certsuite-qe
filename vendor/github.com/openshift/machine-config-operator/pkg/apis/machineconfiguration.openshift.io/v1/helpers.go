@@ -2,10 +2,47 @@ package v1
 
 import (
 	"fmt"
+	"sort"
 
+	ign "github.com/coreos/ignition/config/v2_2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+// MergeMachineConfigs combines multiple machineconfig objects into one object.
+// It sorts all the configs in increasing order of their name.
+// It uses the Ignition config from first object as base and appends all the rest.
+// Kernel arguments are concatenated.
+// It uses only the OSImageURL provided by the CVO and ignores any MC provided OSImageURL.
+func MergeMachineConfigs(configs []*MachineConfig, osImageURL string) *MachineConfig {
+	if len(configs) == 0 {
+		return nil
+	}
+	sort.Slice(configs, func(i, j int) bool { return configs[i].Name < configs[j].Name })
+
+	var fips bool
+	outIgn := configs[0].Spec.Config
+	for idx := 1; idx < len(configs); idx++ {
+		// if any of the config has FIPS enabled, it'll be set
+		if configs[idx].Spec.Fips {
+			fips = true
+		}
+		outIgn = ign.Append(outIgn, configs[idx].Spec.Config)
+	}
+	kargs := []string{}
+	for _, cfg := range configs {
+		kargs = append(kargs, cfg.Spec.KernelArguments...)
+	}
+
+	return &MachineConfig{
+		Spec: MachineConfigSpec{
+			OSImageURL:      osImageURL,
+			KernelArguments: kargs,
+			Config:          outIgn,
+			Fips:            fips,
+		},
+	}
+}
 
 // NewMachineConfigPoolCondition creates a new MachineConfigPool condition.
 func NewMachineConfigPoolCondition(condType MachineConfigPoolConditionType, status corev1.ConditionStatus, reason, message string) *MachineConfigPoolCondition {
@@ -20,23 +57,20 @@ func NewMachineConfigPoolCondition(condType MachineConfigPoolConditionType, stat
 
 // GetMachineConfigPoolCondition returns the condition with the provided type.
 func GetMachineConfigPoolCondition(status MachineConfigPoolStatus, condType MachineConfigPoolConditionType) *MachineConfigPoolCondition {
-	// in case of sync errors, return the last condition that matches, not the first
-	// this exists for redundancy and potential race conditions.
-	var LatestState *MachineConfigPoolCondition
 	for i := range status.Conditions {
 		c := status.Conditions[i]
 		if c.Type == condType {
-			LatestState = &c
+			return &c
 		}
 	}
-	return LatestState
+	return nil
 }
 
 // SetMachineConfigPoolCondition updates the MachineConfigPool to include the provided condition. If the condition that
 // we are about to add already exists and has the same status and reason then we are not going to update.
 func SetMachineConfigPoolCondition(status *MachineConfigPoolStatus, condition MachineConfigPoolCondition) {
 	currentCond := GetMachineConfigPoolCondition(*status, condition.Type)
-	if currentCond != nil && currentCond.Status == condition.Status && currentCond.Reason == condition.Reason && currentCond.Message == condition.Message {
+	if currentCond != nil && currentCond.Status == condition.Status && currentCond.Reason == condition.Reason {
 		return
 	}
 	// Do not update lastTransitionTime if the status of the condition doesn't change.

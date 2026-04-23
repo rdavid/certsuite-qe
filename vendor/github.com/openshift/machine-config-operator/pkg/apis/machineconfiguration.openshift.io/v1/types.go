@@ -1,6 +1,7 @@
 package v1
 
 import (
+	igntypes "github.com/coreos/ignition/config/v2_2/types"
 	configv1 "github.com/openshift/api/config/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -9,12 +10,31 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
-// MachineConfigRoleLabelKey is metadata key in the MachineConfig. Specifies the node role that config should be applied to.
-// For example: `master` or `worker`
-const MachineConfigRoleLabelKey = "machineconfiguration.openshift.io/role"
+// +genclient
+// +genclient:noStatus
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
 
-// KubeletConfigRoleLabelPrefix is the label that must be present in the KubeletConfig CR
-const KubeletConfigRoleLabelPrefix = "pools.operator.machineconfiguration.openshift.io/"
+// MCOConfig describes configuration for MachineConfigOperator.
+type MCOConfig struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec MCOConfigSpec `json:"spec"`
+}
+
+// MCOConfigSpec is the spec for MCOConfig resource.
+type MCOConfigSpec struct {
+}
+
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+
+// MCOConfigList is a list of MCOConfig resources
+type MCOConfigList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata"`
+
+	Items []MCOConfig `json:"items"`
+}
 
 // +genclient
 // +genclient:nonNamespaced
@@ -40,34 +60,24 @@ type ControllerConfigSpec struct {
 	// cloudProviderConfig is the configuration for the given cloud provider
 	CloudProviderConfig string `json:"cloudProviderConfig"`
 
-	// platform is deprecated, use Infra.Status.PlatformStatus.Type instead
-	Platform string `json:"platform,omitempty"`
+	// TODO: Use PlatformType instead of string
 
-	// etcdDiscoveryDomain is deprecated, use Infra.Status.EtcdDiscoveryDomain instead
-	EtcdDiscoveryDomain string `json:"etcdDiscoveryDomain,omitempty"`
+	// The openshift platform, e.g. "libvirt", "openstack", "gcp", "baremetal", "aws", or "none"
+	Platform string `json:"platform"`
+
+	// etcdDiscoveryDomain specifies the etcd discovery domain
+	EtcdDiscoveryDomain string `json:"etcdDiscoveryDomain"`
 
 	// TODO: Use string for CA data
 
-	// kubeAPIServerServingCAData managed Kubelet to API Server Cert... Rotated automatically
-	KubeAPIServerServingCAData []byte `json:"kubeAPIServerServingCAData"`
+	// etcdCAData specifies the etcd CA data
+	EtcdCAData []byte `json:"etcdCAData"`
+
+	// etcdMetricData specifies the etcd metric CA data
+	EtcdMetricCAData []byte `json:"etcdMetricCAData"`
 
 	// rootCAData specifies the root CA data
 	RootCAData []byte `json:"rootCAData"`
-
-	// cloudProvider specifies the cloud provider CA data
-	// +nullable
-	CloudProviderCAData []byte `json:"cloudProviderCAData"`
-
-	// additionalTrustBundle is a certificate bundle that will be added to the nodes
-	// trusted certificate store.
-	// +nullable
-	AdditionalTrustBundle []byte `json:"additionalTrustBundle"`
-
-	// imageRegistryBundleUserData is Image Registry Data provided by the user
-	ImageRegistryBundleUserData []ImageRegistryBundle `json:"imageRegistryBundleUserData"`
-
-	// imageRegistryBundleData is the ImageRegistryData
-	ImageRegistryBundleData []ImageRegistryBundle `json:"imageRegistryBundleData"`
 
 	// TODO: Investigate using a ConfigMapNameReference for the PullSecret and OSImageURL
 
@@ -75,74 +85,15 @@ type ControllerConfigSpec struct {
 	// on all machines.
 	PullSecret *corev1.ObjectReference `json:"pullSecret,omitempty"`
 
-	// internalRegistryPullSecret is the pull secret for the internal registry
-	// +nullable
-	InternalRegistryPullSecret []byte `json:"internalRegistryPullSecret"`
-
 	// images is map of images that are used by the controller to render templates under ./templates/
 	Images map[string]string `json:"images"`
 
-	// BaseOSContainerImage is the new-format container image for operating system updates.
-	BaseOSContainerImage string `json:"baseOSContainerImage"`
-
-	// BaseOSExtensionsContainerImage is the matching extensions container for the new-format container
-	BaseOSExtensionsContainerImage string `json:"baseOSExtensionsContainerImage"`
-
-	// OSImageURL is the old-format container image that contains the OS update payload.
+	// osImageURL is the location of the container image that contains the OS update payload.
+	// Its value is taken from the data.osImageURL field on the machine-config-osimageurl ConfigMap.
 	OSImageURL string `json:"osImageURL"`
 
-	// releaseImage is the image used when installing the cluster
-	ReleaseImage string `json:"releaseImage"`
-
 	// proxy holds the current proxy configuration for the nodes
-	// +nullable
 	Proxy *configv1.ProxyStatus `json:"proxy"`
-
-	// infra holds the infrastructure details
-	// +kubebuilder:validation:EmbeddedResource
-	// +nullable
-	Infra *configv1.Infrastructure `json:"infra"`
-
-	// dns holds the cluster dns details
-	// +kubebuilder:validation:EmbeddedResource
-	// +nullable
-	DNS *configv1.DNS `json:"dns"`
-
-	// ipFamilies indicates the IP families in use by the cluster network
-	IPFamilies IPFamiliesType `json:"ipFamilies"`
-
-	// networkType holds the type of network the cluster is using
-	// XXX: this is temporary and will be dropped as soon as possible in favor of a better support
-	// to start network related services the proper way.
-	// Nobody is also changing this once the cluster is up and running the first time, so, disallow
-	// regeneration if this changes.
-	NetworkType string `json:"networkType,omitempty"`
-
-	// Network contains additional network related information
-	// +nullable
-	Network *NetworkInfo `json:"network"`
-}
-
-type ImageRegistryBundle struct {
-	File string `json:"file"`
-	Data []byte `json:"data"`
-}
-
-// IPFamiliesType indicates whether the cluster network is IPv4-only, IPv6-only, or dual-stack
-type IPFamiliesType string
-
-const (
-	IPFamiliesIPv4                 IPFamiliesType = "IPv4"
-	IPFamiliesIPv6                 IPFamiliesType = "IPv6"
-	IPFamiliesDualStack            IPFamiliesType = "DualStack"
-	IPFamiliesDualStackIPv6Primary IPFamiliesType = "DualStackIPv6Primary"
-)
-
-// Network contains network related configuration
-type NetworkInfo struct {
-	// MTUMigration contains the MTU migration configuration.
-	// +nullable
-	MTUMigration *configv1.MTUMigration `json:"mtuMigration"`
 }
 
 // ControllerConfigStatus is the status for ControllerConfig
@@ -154,22 +105,6 @@ type ControllerConfigStatus struct {
 	// conditions represents the latest available observations of current state.
 	// +optional
 	Conditions []ControllerConfigStatusCondition `json:"conditions"`
-
-	// controllerCertificates represents the latest available observations of the automatically rotating certificates in the MCO.
-	// +optional
-	ControllerCertificates []ControllerCertificate `json:"controllerCertificates"`
-}
-
-// ControllerCertificate contains info about a specific cert.
-type ControllerCertificate struct {
-	// subject is the cert subject
-	Subject string `json:"subject"`
-
-	// signer is the  cert Issuer
-	Signer string `json:"signer"`
-
-	// bundleFile is the larger bundle a cert comes from
-	BundleFile string `json:"bundleFile"`
 }
 
 // ControllerConfigStatusCondition contains condition information for ControllerConfigStatus
@@ -184,7 +119,7 @@ type ControllerConfigStatusCondition struct {
 	// +nullable
 	LastTransitionTime metav1.Time `json:"lastTransitionTime"`
 
-	// reason is the reason for the condition's last transition.  Reasons are PascalCase
+	// reason is the reason for the condition's last transition.  Reasons are CamelCase
 	Reason string `json:"reason,omitempty"`
 
 	// message provides additional information about the current condition.
@@ -219,7 +154,7 @@ type ControllerConfigList struct {
 // +genclient
 // +genclient:noStatus
 // +genclient:nonNamespaced
-// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +k8s:deepcopy-gen=false
 
 // MachineConfig defines the configuration for a machine
 type MachineConfig struct {
@@ -234,20 +169,12 @@ type MachineConfigSpec struct {
 	// OSImageURL specifies the remote location that will be used to
 	// fetch the OS.
 	OSImageURL string `json:"osImageURL"`
-
-	// BaseOSExtensionsContainerImage specifies the remote location that will be used
-	// to fetch the extensions container matching a new-format OS image
-	BaseOSExtensionsContainerImage string `json:"baseOSExtensionsContainerImage"`
-
 	// Config is a Ignition Config object.
-	Config runtime.RawExtension `json:"config"`
+	Config igntypes.Config `json:"config"`
 
-	// +nullable
 	KernelArguments []string `json:"kernelArguments"`
-	Extensions      []string `json:"extensions"`
 
-	FIPS       bool   `json:"fips"`
-	KernelType string `json:"kernelType"`
+	Fips bool `json:"fips"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -288,17 +215,8 @@ type MachineConfigPoolSpec struct {
 	// This includes generating new desiredMachineConfig and update of machines.
 	Paused bool `json:"paused"`
 
-	// maxUnavailable defines either an integer number or percentage
-	// of nodes in the pool that can go Unavailable during an update.
-	// This includes nodes Unavailable for any reason, including user
-	// initiated cordons, failing nodes, etc. The default value is 1.
-	//
-	// A value larger than 1 will mean multiple nodes going unavailable during
-	// the update, which may affect your workload stress on the remaining nodes.
-	// You cannot set this value to 0 to stop updates (it will default back to 1);
-	// to stop updates, use the 'paused' property instead. Drain will respect
-	// Pod Disruption Budgets (PDBs) such as etcd quorum guards, even if
-	// maxUnavailable is greater than one.
+	// maxUnavailable specifies the percentage or constant number of machines that can be updating at any given time.
+	// default is 1.
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 
 	// The targeted MachineConfig object for the machine config pool.
@@ -334,15 +252,6 @@ type MachineConfigPoolStatus struct {
 	// conditions represents the latest available observations of current state.
 	// +optional
 	Conditions []MachineConfigPoolCondition `json:"conditions"`
-
-	// certExpirys keeps track of important certificate expiration data
-	CertExpirys []CertExpiry `json:"certExpirys"`
-}
-
-// ceryExpiry contains the bundle name and the expiry date
-type CertExpiry struct {
-	Bundle  string `json:"bundle"`
-	Subject string `json:"subject"`
 }
 
 // MachineConfigPoolStatusConfiguration stores the current configuration for the pool, and
@@ -398,14 +307,6 @@ const (
 
 	// MachineConfigPoolDegraded is the overall status of the pool based, today, on whether we fail with NodeDegraded or RenderDegraded
 	MachineConfigPoolDegraded MachineConfigPoolConditionType = "Degraded"
-
-	MachineConfigPoolBuildPending MachineConfigPoolConditionType = "BuildPending"
-
-	MachineConfigPoolBuilding MachineConfigPoolConditionType = "Building"
-
-	MachineConfigPoolBuildSuccess MachineConfigPoolConditionType = "BuildSuccess"
-
-	MachineConfigPoolBuildFailed MachineConfigPoolConditionType = "BuildFailed"
 )
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
@@ -435,16 +336,8 @@ type KubeletConfig struct {
 
 // KubeletConfigSpec defines the desired state of KubeletConfig
 type KubeletConfigSpec struct {
-	AutoSizingReserved        *bool                 `json:"autoSizingReserved,omitempty"`
-	LogLevel                  *int32                `json:"logLevel,omitempty"`
 	MachineConfigPoolSelector *metav1.LabelSelector `json:"machineConfigPoolSelector,omitempty"`
 	KubeletConfig             *runtime.RawExtension `json:"kubeletConfig,omitempty"`
-
-	// If unset, the default is based on the apiservers.config.openshift.io/cluster resource.
-	// Note that only Old and Intermediate profiles are currently supported, and
-	// the maximum available MinTLSVersions is VersionTLS12.
-	// +optional
-	TLSSecurityProfile *configv1.TLSSecurityProfile `json:"tlsSecurityProfile,omitempty"`
 }
 
 // KubeletConfigStatus defines the observed state of a KubeletConfig
@@ -470,7 +363,7 @@ type KubeletConfigCondition struct {
 	// +nullable
 	LastTransitionTime metav1.Time `json:"lastTransitionTime"`
 
-	// reason is the reason for the condition's last transition.  Reasons are PascalCase
+	// reason is the reason for the condition's last transition.  Reasons are CamelCase
 	Reason string `json:"reason,omitempty"`
 
 	// message provides additional information about the current condition.
@@ -523,7 +416,7 @@ type ContainerRuntimeConfigSpec struct {
 // ContainerRuntimeConfiguration defines the tuneables of the container runtime
 type ContainerRuntimeConfiguration struct {
 	// pidsLimit specifies the maximum number of processes allowed in a container
-	PidsLimit *int64 `json:"pidsLimit,omitempty"`
+	PidsLimit int64 `json:"pidsLimit,omitempty"`
 
 	// logLevel specifies the verbosity of the logs based on the level it is set to.
 	// Options are fatal, panic, error, warn, info, and debug.
@@ -532,24 +425,12 @@ type ContainerRuntimeConfiguration struct {
 	// logSizeMax specifies the Maximum size allowed for the container log file.
 	// Negative numbers indicate that no size limit is imposed.
 	// If it is positive, it must be >= 8192 to match/exceed conmon's read buffer.
-	LogSizeMax resource.Quantity `json:"logSizeMax,omitempty"`
+	LogSizeMax resource.Quantity `json:"logSizeMax"`
 
 	// overlaySize specifies the maximum size of a container image.
-	// This flag can be used to set quota on the size of container images.
-	OverlaySize resource.Quantity `json:"overlaySize,omitempty"`
-
-	// defaultRuntime is the name of the OCI runtime to be used as the default.
-	DefaultRuntime ContainerRuntimeDefaultRuntime `json:"defaultRuntime,omitempty"`
+	// This flag can be used to set quota on the size of container images. (default: 10GB)
+	OverlaySize resource.Quantity `json:"overlaySize"`
 }
-
-type ContainerRuntimeDefaultRuntime string
-
-const (
-	ContainerRuntimeDefaultRuntimeEmpty   = ""
-	ContainerRuntimeDefaultRuntimeRunc    = "runc"
-	ContainerRuntimeDefaultRuntimeCrun    = "crun"
-	ContainerRuntimeDefaultRuntimeDefault = ContainerRuntimeDefaultRuntimeRunc
-)
 
 // ContainerRuntimeConfigStatus defines the observed state of a ContainerRuntimeConfig
 type ContainerRuntimeConfigStatus struct {
@@ -574,7 +455,7 @@ type ContainerRuntimeConfigCondition struct {
 	// +nullable
 	LastTransitionTime metav1.Time `json:"lastTransitionTime"`
 
-	// reason is the reason for the condition's last transition.  Reasons are PascalCase
+	// reason is the reason for the condition's last transition.  Reasons are CamelCase
 	Reason string `json:"reason,omitempty"`
 
 	// message provides additional information about the current condition.
